@@ -13,6 +13,7 @@ use tonic::transport::Channel;
 use tracing_subscriber::filter::FilterExt;
 
 use pb::{echo_client::EchoClient, EchoRequest};
+use tonic::transport;
 
 fn echo_requests_iter() -> impl Stream<Item = EchoRequest> {
     tokio_stream::iter(1..usize::MAX).map(|i| EchoRequest {
@@ -101,7 +102,15 @@ async fn bidirectional_streaming_echo_throttle(client: &mut EchoClient<Channel>,
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = EchoClient::connect("http://127.0.0.1:50052").await.unwrap();
+
+    let channel = Channel::from_shared("http://127.0.0.1:50052")?
+        .http2_keep_alive_interval(Duration::from_secs(1))
+        .keep_alive_timeout(Duration::from_secs(1))
+        .tcp_keepalive(Some(Duration::from_secs(3)))
+        .connect()
+        .await?;
+
+    let mut client = EchoClient::new(channel);
 
     println!("Streaming echo:");
     streaming_echo(&mut client, 5).await;
